@@ -78,31 +78,43 @@ function import_products_for_single_site($file, $url) {
 }
 
 function import_products_from_file($file) {
-    if (($handle = fopen($file, 'r')) !== FALSE) {
-        $header = fgetcsv($handle, 1000, ',');
-        $rows = [];
+    global $wp_filesystem;
+    
+    // Initialize WP_Filesystem
+    if (!WP_Filesystem()) {
+        WP_CLI::error('Failed to initialize WP_Filesystem.');
+        return;
+    }
 
-        while (($row = fgetcsv($handle, 1000, ',')) !== FALSE) {
-            if (count($header) !== count($row)) {
-                WP_CLI::warning('Skipping row due to column mismatch: ' . implode(',', $row));
+    // Read file using WP_Filesystem
+    if ($wp_filesystem->exists($file)) {
+        $file_contents = $wp_filesystem->get_contents($file);
+        $rows = str_getcsv($file_contents, "\n"); // Get each row
+
+        // Get the header row (first row)
+        $header = str_getcsv(array_shift($rows), ',');
+        
+        $parsed_rows = [];
+        foreach ($rows as $row) {
+            $row_data = str_getcsv($row, ',');
+            if (count($header) !== count($row_data)) {
+                WP_CLI::warning('Skipping row due to column mismatch: ' . implode(',', $row_data));
                 continue;
             }
-            $rows[] = array_combine($header, $row);
+            $parsed_rows[] = array_combine($header, $row_data);
         }
 
-        fclose($handle);
-
-        $total_rows = count($rows);
+        $total_rows = count($parsed_rows);
         $progress = Utils\make_progress_bar('Importing products', $total_rows);
 
-        foreach ($rows as $data) {
+        foreach ($parsed_rows as $data) {
             import_product($data);
             $progress->tick();
         }
 
         $progress->finish();
     } else {
-        WP_CLI::warning('Failed to open the CSV file.');
+        WP_CLI::warning('CSV file not found or failed to open.');
     }
 }
 
