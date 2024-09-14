@@ -167,12 +167,27 @@ function import_product($data) {
     $product->update_meta_data('_wc_memberships_force_public', $data['_wc_memberships_force_public']);
     $product->update_meta_data('_wc_memberships_exclude_discounts', $data['_wc_memberships_exclude_discounts']);
     
-    // Set product category to "membership"
-    $category = get_term_by('slug', 'membership', 'product_cat');
+// Set product category to "membership"
+$category = get_term_by('slug', 'membership', 'product_cat');
+
     if ($category) {
         wp_set_object_terms($product->get_id(), $category->term_id, 'product_cat');
     } else {
-        WP_CLI::warning('Category "membership" not found.');
+        // If category doesn't exist, create it
+        $new_category = wp_insert_term(
+            'membership',  // The term
+            'product_cat', // The taxonomy
+            array(
+                'slug' => 'membership',
+            )
+        );
+
+        if (!is_wp_error($new_category)) {
+            WP_CLI::success('Category "membership" created.');
+            wp_set_object_terms($product->get_id(), $new_category['term_id'], 'product_cat');
+        } else {
+            WP_CLI::warning('Failed to create category "membership".');
+        }
     }
 
     $product->save();
